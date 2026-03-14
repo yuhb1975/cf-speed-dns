@@ -95,11 +95,15 @@ def update_dns_record(
     data = {
         "type": "A",
         "name": name,
-        "content": cf_ip
+        "content": cf_ip,
+        "ttl": 1  # 1 means automatic (use Cloudflare default)
     }
 
     try:
         response = requests.put(url, headers=headers, json=data, timeout=DEFAULT_TIMEOUT)
+        if not response.ok:
+            # Print detailed error for debugging
+            print(f"API Error: {response.status_code} - {response.text}")
         response.raise_for_status()
         log_success("cf_dns_change", cf_ip)
         return f"ip:{cf_ip} 解析 {name} 成功"
