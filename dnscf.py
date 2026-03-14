@@ -60,7 +60,7 @@ def get_dns_records(name: str, zone_id: str, headers: Dict[str, str]) -> List[st
         records = response.json().get("result", [])
 
         for record in records:
-            if record.get("name") == name:
+            if record.get("name") == name and record.get("type") == "A":
                 record_ids.append(record.get("id"))
     except requests.RequestException as e:
         print(f"Error fetching DNS records: {e}")
