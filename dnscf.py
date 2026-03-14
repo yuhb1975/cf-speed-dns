@@ -39,9 +39,9 @@ def get_zone_id() -> str:
     return get_env_var("CF_ZONE_ID")
 
 
-def get_dns_records(name: str, zone_id: str, headers: Dict[str, str]) -> List[str]:
+def get_dns_records(name: str, zone_id: str, headers: Dict[str, str]) -> List[Dict[str, Any]]:
     """
-    Fetch DNS record IDs for the given name.
+    Fetch DNS record info for the given name.
 
     Args:
         name: DNS record name
@@ -49,30 +49,33 @@ def get_dns_records(name: str, zone_id: str, headers: Dict[str, str]) -> List[st
         headers: Request headers with auth
 
     Returns:
-        List of record IDs
+        List of record info dicts with 'id' and 'proxied' keys
     """
-    record_ids = []
+    records = []
     url = f"{CF_API_BASE}/zones/{zone_id}/dns_records"
 
     try:
         response = requests.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
         response.raise_for_status()
-        records = response.json().get("result", [])
+        result = response.json().get("result", [])
 
-        for record in records:
+        for record in result:
             if record.get("name") == name and record.get("type") == "A":
-                record_ids.append(record.get("id"))
+                records.append({
+                    "id": record.get("id"),
+                    "proxied": record.get("proxied", False)
+                })
     except requests.RequestException as e:
         print(f"Error fetching DNS records: {e}")
     except Exception as e:
         traceback.print_exc()
         print(f"Unexpected error fetching DNS records: {e}")
 
-    return record_ids
+    return records
 
 
 def update_dns_record(
-    record_id: str,
+    record_info: Dict[str, Any],
     name: str,
     cf_ip: str,
     zone_id: str,
@@ -82,7 +85,7 @@ def update_dns_record(
     Update a DNS record with the new IP.
 
     Args:
-        record_id: DNS record ID
+        record_info: DNS record info dict with 'id' and 'proxied'
         name: DNS record name
         cf_ip: New IP address
         zone_id: Cloudflare zone ID
@@ -91,12 +94,15 @@ def update_dns_record(
     Returns:
         Status message
     """
+    record_id = record_info["id"]
+    proxied = record_info.get("proxied", False)
     url = f"{CF_API_BASE}/zones/{zone_id}/dns_records/{record_id}"
     data = {
         "type": "A",
         "name": name,
         "content": cf_ip,
-        "ttl": 1  # 1 means automatic (use Cloudflare default)
+        "ttl": 1 if proxied else 600,  # Auto TTL if proxied, otherwise 600s
+        "proxied": proxied
     }
 
     try:
